@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="te">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ayyappa Bhajana Songs</title>
+<style>
+  body { margin:0; font-family: "Noto Sans Telugu", system-ui, sans-serif; background:#fff7ec; color:#2b1b0e; }
+  header { background:#b3470f; color:#fff; padding:1rem; text-align:center; }
+  header h1 { margin:0; font-size:1.5rem; }
+  .wrap { display:flex; flex-wrap:wrap; max-width:1000px; margin:auto; }
+  nav { flex:1 1 260px; padding:1rem; }
+  main { flex:3 1 400px; padding:1rem; }
+  input { width:100%; padding:.5rem; margin-bottom:1rem; box-sizing:border-box; }
+  details { margin-bottom:.4rem; border-radius:6px; background:#fde9d2; }
+  summary { cursor:pointer; padding:.5rem .7rem; font-weight:bold; color:#b3470f; list-style:none; }
+  summary::-webkit-details-marker { display:none; }
+  summary::before { content:"▸ "; }
+  details[open] summary::before { content:"▾ "; }
+  summary .count { float:right; font-weight:normal; color:#7a5a3a; font-size:.85em; }
+  details a { margin:0 .4rem; }
+  details[open] { padding-bottom:.4rem; }
+  nav a { display:block; padding:.3rem .5rem; color:inherit; text-decoration:none; border-radius:4px; }
+  nav a:hover, nav a.active { background:#f6d6b0; }
+  /* Home view: only the song list, centered. Song view: list on the left, lyrics on the right. */
+  body.home main { display:none; }
+  body.home nav { flex:0 1 500px; margin:1rem auto; }
+  header { cursor:pointer; }
+  #title { text-align:center; }
+  #lyrics { font-size:1.25rem; line-height:1.8; text-align:center; padding-bottom:60vh; }
+  #lyrics .line { white-space:pre-wrap; padding:0 .3rem; border-radius:4px; transition:background .3s; cursor:pointer; }
+  #lyrics .line.cur { background:#fff1c9; }
+  #lyrics .w { cursor:pointer; border-radius:3px; padding:0 .05em; transition:background .15s, color .15s; }
+  #lyrics .w.done { color:#b3470f; }
+  #lyrics .w.now { background:#ffc83d; color:#2b1b0e; }
+  #lyrics .gap { height:1em; }
+  .toolbar { position:sticky; top:0; z-index:1; background:#fff7ec; padding:.5rem 0; display:flex; gap:.6rem;
+             align-items:center; justify-content:center; flex-wrap:wrap; border-bottom:1px solid #f0d2ae; font-size:.9rem; }
+  .toolbar button { padding:.4rem .8rem; border:0; border-radius:6px; background:#b3470f; color:#fff; cursor:pointer; font-size:1rem; }
+  .toolbar button.on { background:#2e7d32; }
+  .toolbar .mode { display:inline-flex; gap:.5rem; align-items:center; padding:.25rem .5rem;
+                   border:1px solid #f0d2ae; border-radius:8px; background:#fffaf3; transition:opacity .2s; }
+  .toolbar .mode.off { opacity:.35; filter:grayscale(1); cursor:not-allowed; }
+  .toolbar .mode.off * { pointer-events:none; }
+  #status { color:#7a5a3a; width:100%; text-align:center; }
+  .note { color:#7a5a3a; font-style:italic; }
+  /* Copy protection: no text selection anywhere except the search box. */
+  body { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  input { -webkit-user-select:text; user-select:text; }
+  @media print { body { display:none; } }
+  /* Password screen */
+  body.locked header, body.locked .wrap { display:none; }
+  #lock { display:none; min-height:100vh; align-items:center; justify-content:center; }
+  body.locked #lock { display:flex; }
+  #lock form { background:#fde9d2; padding:2rem; border-radius:12px; text-align:center; width:min(90vw, 340px); }
+  #lock h2 { margin-top:0; color:#b3470f; }
+  #lock button { padding:.5rem 1.2rem; border:0; border-radius:6px; background:#b3470f; color:#fff; font-size:1rem; cursor:pointer; }
+  #lockErr { color:#b00020; min-height:1.2em; }
+</style>
+</head>
+<body class="home locked">
+<div id="lock">
+  <form id="lockForm">
+    <h2>🙏 Swamiye Saranam Ayyappa</h2>
+    <p>Enter the password to open the bhajana songs.</p>
+    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" autofocus>
+    <p id="lockErr"></p>
+    <button type="submit">Open</button>
+  </form>
+</div>
+<header title="Back to song list"><h1>🙏 Swamiye Saranam Ayyappa — Bhajana Songs</h1></header>
+<div class="wrap">
+  <nav><input id="q" placeholder="Search songs..."><div id="list"></div></nav>
+  <main>
+    <div class="toolbar">
+      <span class="mode" id="speedMode">
+        <button id="auto">▶ Auto-scroll</button>
+        <label title="How fast the highlight moves (words per minute)">Speed
+          <input id="speed" type="range" min="15" max="150" value="50" style="width:100px;margin:0;vertical-align:middle">
+          <span id="speedVal">50</span>/min</label>
+      </span>
+      <span class="mode" id="voiceMode"><button id="voice">🎤 Voice follow</button>
+        <select id="vlang" title="Recognition language (try English if Telugu isn't picking up)">
+          <option value="te-IN">Telugu</option>
+          <option value="en-IN">English (India)</option>
+        </select></span>
+      <div id="status"></div>
+    </div>
+    <h2 id="title">Select a song</h2><div id="lyrics"></div>
+  </main>
+</div>
+<script src="songs.js"></script>
+<script src="lyrics.js"></script>
+<script src="config.js"></script>
+<script>
+const list = document.getElementById("list");
+// Clean up pasted lyrics: trim each line, drop the blank line between every
+// line (common when copying from websites), and keep one blank line between stanzas.
+function formatLyrics(raw) {
+  let lines = raw.replace(/\r/g, "").split("\n").map(l => l.trim());
+  const filled = lines.filter(Boolean).length;
+  const blanks = lines.length - filled;
+  if (filled > 4 && blanks >= filled - 2) lines = lines.filter(Boolean);
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+function show(song, el) {
+  document.querySelectorAll("nav a").forEach(a => a.classList.remove("active"));
+  el.classList.add("active");
+  document.getElementById("title").textContent = song.title;
+  stopAuto();
+  renderLyrics(formatLyrics((window.LYRICS || {})[song.title] || song.lyrics || ""));
+  location.hash = encodeURIComponent(song.title);
+  document.body.classList.remove("home");
+  window.scrollTo(0, 0);
+}
+
+// ---------- Lyrics rendering (one <span> per word, so we can highlight word by word) ----------
+let words = [];    // [{ el, key, line }]
+let lineEls = [];  // line <div>s
+// Phonetic "sound key" for a word, used to compare lyrics with what the speech recogniser hears.
+// Works for Telugu script and romanised/English text alike: vowels, aspiration, retroflex vs
+// dental, short vs long and doubled letters are all ignored, so బొజ్జ / బోజ్జ / bojja → "bj".
+const TE = { "క":"k","ఖ":"k","గ":"g","ఘ":"g","ఙ":"n","చ":"c","ఛ":"c","జ":"j","ఝ":"j","ఞ":"n",
+  "ట":"t","ఠ":"t","డ":"d","ఢ":"d","ణ":"n","త":"t","థ":"t","ద":"d","ధ":"d","న":"n",
+  "ప":"p","ఫ":"p","బ":"b","భ":"b","మ":"m","య":"y","ర":"r","ఱ":"r","ల":"l","ళ":"l","ఴ":"l",
+  "వ":"v","శ":"s","ష":"s","స":"s","హ":"h" };
+function keyOf(w) {
+  let out = "";
+  if (/[ఀ-౿]/.test(w)) {
+    const chars = [...w];
+    chars.forEach((ch, i) => {
+      if (TE[ch]) out += TE[ch];
+      else if (ch === "ం") out += chars.slice(i + 1).some(c => TE[c]) ? "n" : "m";  // anusvara: n before a consonant, m at the end
+    });
+    if (/^[అ-ఔ]/.test(w)) out = "a" + out;             // word starts with a vowel letter
+  } else {
+    out = w.toLowerCase()
+      .replace(/[^a-z]/g, "")
+      .replace(/([kgcjtdpb])h/g, "$1").replace(/sh/g, "s")       // aspirates: bh→b, th→t, sh→s
+      .replace(/w/g, "v").replace(/z/g, "j").replace(/f/g, "p").replace(/q/g, "k").replace(/x/g, "ks");
+    const first = /^[aeiou]/.test(out) ? "a" : "";
+    out = first + out.replace(/[aeiouy]+$/, "").replace(/[aeiou]/g, "");
+  }
+  return out.replace(/(.)\1+/g, "$1");                           // doubled letters: jj → j
+}
+const keys = t => t.split(/\s+/).map(keyOf).filter(Boolean);
+// Similarity 0..1 between two sound keys (1 - edit distance / length).
+function sim(a, b) {
+  if (a === b) return 1;
+  const m = a.length, n = b.length;
+  if (!m || !n) return 0;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++)
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return 1 - prev[n] / Math.max(m, n);
+}
+function renderLyrics(text) {
+  const l = document.getElementById("lyrics");
+  l.innerHTML = ""; words = []; lineEls = []; auto.cur = -1;
+  if (!text) { l.textContent = "Lyrics not added yet."; l.className = "note"; return; }
+  l.className = "";
+  text.split("\n").forEach(t => {
+    const d = document.createElement("div");
+    l.appendChild(d);
+    if (!t) { d.className = "gap"; return; }
+    d.className = "line";
+    const li = lineEls.push(d) - 1;
+    // Clicking a line (outside a word) starts following from the first word of that line.
+    d.onclick = e => {
+      if (e.target !== d) return;
+      const first = words.findIndex(w => w.line === li);
+      if (first >= 0) { setWord(first); auto.acc = 0; }
+    };
+    t.split(/(\s+)/).forEach(part => {
+      if (!part) return;
+      if (/^\s+$/.test(part)) { d.appendChild(document.createTextNode(part)); return; }
+      const s = document.createElement("span");
+      s.className = "w"; s.textContent = part; d.appendChild(s);
+      const idx = words.push({ el: s, key: keyOf(part), line: li }) - 1;
+      s.onclick = () => { setWord(idx); auto.acc = 0; };   // click a word to jump the highlight there
+    });
+  });
+}
+
+// Highlight word i: earlier words in the same line are "done", word i is "now".
+function setWord(i) {
+  i = Math.max(-1, Math.min(words.length - 1, i));
+  const oldLine = auto.cur >= 0 ? words[auto.cur].line : -1;
+  document.querySelectorAll("#lyrics .w.now, #lyrics .w.done, #lyrics .line.cur")
+    .forEach(e => e.classList.remove("now", "done", "cur"));
+  auto.cur = i;
+  if (i < 0) return;
+  const line = words[i].line;
+  lineEls[line].classList.add("cur");
+  for (let k = i; k >= 0 && words[k].line === line; k--) words[k].el.classList.add(k === i ? "now" : "done");
+  if (line !== oldLine) {
+    const el = lineEls[line];
+    window.scrollTo({ top: el.getBoundingClientRect().top + scrollY - innerHeight * 0.35, behavior: "smooth" });
+  }
+}
+
+// ---------- Two independent follow modes (only one runs at a time) ----------
+// 1) Auto-scroll: timer only, no microphone. The highlight moves word by word at the chosen speed.
+// 2) Voice follow: speech recognition only (Chrome/Edge, needs internet). The highlight moves
+//    to the word it recognises; nothing moves on its own.
+const speedBtn = document.getElementById("auto"), voiceBtn = document.getElementById("voice");
+const statusEl = document.getElementById("status"), speedEl = document.getElementById("speed");
+const auto = { mode: null, raf: 0, rec: null, cur: -1, acc: 0 };
+const setStatus = s => statusEl.textContent = s;
+speedEl.oninput = () => document.getElementById("speedVal").textContent = speedEl.value;
+speedBtn.onclick = () => auto.mode === "speed" ? stopAuto() : startSpeed();
+voiceBtn.onclick = () => auto.mode === "voice" ? stopAuto() : startVoice();
+
+// While one mode runs, the other mode's controls are dimmed and disabled.
+function lockOther(mode) {
+  const groups = { speed: document.getElementById("speedMode"), voice: document.getElementById("voiceMode") };
+  for (const [name, el] of Object.entries(groups)) {
+    const off = mode !== null && name !== mode;
+    el.classList.toggle("off", off);
+    el.querySelectorAll("button, input, select").forEach(c => c.disabled = off);
+    el.title = off ? "Stop the other mode first" : "";
+  }
+}
+
+function begin(mode) {
+  stopAuto();
+  if (!words.length) { setStatus("No lyrics to follow."); return false; }
+  auto.mode = mode; auto.acc = 0;
+  if (auto.cur < 0 || auto.cur >= words.length - 1) setWord(0);
+  lockOther(mode);
+  return true;
+}
+
+// ----- Mode 1: Auto-scroll with speed -----
+function startSpeed() {
+  if (!begin("speed")) return;
+  speedBtn.textContent = "⏸ Pause"; speedBtn.classList.add("on");
+  setStatus("Auto-scrolling at the selected speed. Click any word to jump there.");
+  let last = performance.now();
+  const tick = now => {
+    if (auto.mode !== "speed") return;
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    auto.acc += speedEl.value / 60 * dt;
+    if (auto.acc >= 1) {
+      auto.acc -= 1;
+      if (auto.cur >= words.length - 1) { stopAuto(); setStatus("End of song."); return; }
+      setWord(auto.cur + 1);
+    }
+    auto.raf = requestAnimationFrame(tick);
+  };
+  auto.raf = requestAnimationFrame(tick);
+}
+
+// ----- Mode 2: Auto-scroll with voice recognition -----
+const voice = { misses: 0, lastMatch: 0, restartTimer: 0 };
+function startVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { setStatus("Voice follow needs Chrome or Edge (speech recognition not supported in this browser)."); return; }
+  if (!begin("voice")) return;
+  voiceBtn.textContent = "⏹ Stop voice"; voiceBtn.classList.add("on");
+  voice.misses = 0; voice.lastMatch = performance.now();
+  const r = new SR();
+  r.lang = document.getElementById("vlang").value;
+  r.continuous = true; r.interimResults = true; r.maxAlternatives = 5;
+  r.onresult = e => {
+    // Use the latest result plus the one before it (more context), and try every alternative.
+    const last = e.results[e.results.length - 1];
+    const before = e.results.length > 1 ? e.results[e.results.length - 2][0].transcript : "";
+    let best = null;
+    for (let a = 0; a < last.length; a++) {
+      const m = findMatch(keys(before + " " + last[a].transcript).slice(-8));
+      if (m && (!best || m.score > best.score)) best = m;
+    }
+    const heardText = last[0].transcript.trim().split(/\s+/).slice(-6).join(" ");
+    if (best) {
+      voice.misses = 0; voice.lastMatch = performance.now();
+      if (best.index !== auto.cur) setWord(best.index);
+      setStatus("✓ Heard: " + heardText);
+    } else {
+      if (last.isFinal) voice.misses++;
+      setStatus("Heard: " + heardText + "  (no match yet)");
+    }
+  };
+  r.onerror = e => {
+    if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "network") {
+      stopAuto(); setStatus("Voice follow unavailable (" + e.error + "). Check microphone permission and internet.");
+    } // "no-speech" / "aborted" are normal during pauses: onend restarts listening.
+  };
+  // Chrome ends recognition after silence or ~1 minute; restart after a short delay.
+  r.onend = () => {
+    if (auto.mode !== "voice" || auto.rec !== r) return;
+    clearTimeout(voice.restartTimer);
+    voice.restartTimer = setTimeout(() => { if (auto.rec === r) try { r.start(); } catch {} }, 250);
+  };
+  auto.rec = r;
+  try { r.start(); setStatus("Listening… start singing."); }
+  catch { stopAuto(); setStatus("Could not start voice recognition."); }
+}
+
+// Fuzzy local alignment (Smith-Waterman style) of the heard words against the lyrics.
+// Returns { index, score } of the lyric word where the heard phrase ends, or null.
+// Searches near the current word first; if that keeps failing (or we're lost), the whole song.
+// People read top to bottom, so the highlight only ever moves FORWARD: from the current word
+// to the end of the next 2 lines. It never goes back. (Click any line to restart from there.)
+const LINES_AHEAD = 2;
+function findMatch(heard) {
+  if (heard.length < 2 || !words.length) return null;
+  const from = Math.max(0, auto.cur);
+  const curLine = words[from].line;
+  let to = from;
+  while (to < words.length && words[to].line <= curLine + LINES_AHEAD) to++;
+  const m = alignIn(heard, from, to);
+  return m && m.index > auto.cur ? m : null;
+}
+
+function alignIn(heard, from, to) {
+  // Only lyric words that have a sound key take part (skips markers like "|2|" or "(").
+  const idx = [];
+  for (let k = from; k < to; k++) if (words[k].key) idx.push(k);
+  const n = heard.length, W = idx.length;
+  if (!W) return null;
+  const GAP = 0.45, MATCH_MIN = 0.55;
+  const L = j => words[idx[j - 1]].key;
+  let prev2 = null, prev = new Float32Array(W + 1), best = null;
+  for (let i = 1; i <= n; i++) {
+    const cur = new Float32Array(W + 1);
+    for (let j = 1; j <= W; j++) {
+      let s = sim(heard[i - 1], L(j));
+      let diag = prev[j - 1] + (s >= MATCH_MIN ? s : -0.6);
+      // The recogniser may split one lyric word into two, or join two into one.
+      if (i >= 2) {
+        const s2 = sim(heard[i - 2] + heard[i - 1], L(j));
+        if (s2 >= MATCH_MIN && prev2[j - 1] + 2 * s2 > diag) { diag = prev2[j - 1] + 2 * s2; s = s2; }
+      }
+      if (j >= 2) {
+        const s2 = sim(heard[i - 1], L(j - 1) + L(j));
+        if (s2 >= MATCH_MIN && prev[j - 2] + 2 * s2 > diag) { diag = prev[j - 2] + 2 * s2; s = s2; }
+      }
+      cur[j] = Math.max(0, diag, prev[j] - GAP, cur[j - 1] - GAP);
+      // Only accept alignments that reach the last (or second-last) heard word: that's "now".
+      if (i >= n - 1 && s >= MATCH_MIN && cur[j] === diag) {
+        const word = idx[j - 1], dist = word - auto.cur;
+        // Prefer just ahead of the current word (choruses repeat); jumping back costs more.
+        const score = cur[j] - (dist >= 0 ? 0.004 * dist : 0.03 * -dist) - (i === n ? 0 : 0.3);
+        if (!best || score > best.score) best = { index: word, score, raw: cur[j] };
+      }
+    }
+    prev2 = prev; prev = cur;
+  }
+  // Need roughly two good word matches; going backwards needs stronger evidence.
+  if (!best) return null;
+  const need = best.index < auto.cur ? 2.4 : 1.4;
+  return best.raw >= need ? best : null;
+}
+
+function stopAuto() {
+  auto.mode = null;
+  cancelAnimationFrame(auto.raf);
+  if (auto.rec) { const r = auto.rec; auto.rec = null; try { r.abort(); } catch {} }
+  speedBtn.textContent = "▶ Auto-scroll"; speedBtn.classList.remove("on");
+  voiceBtn.textContent = "🎤 Voice follow"; voiceBtn.classList.remove("on");
+  lockOther(null);
+  setStatus("");
+}
+
+function goHome() {
+  stopAuto();
+  document.body.classList.add("home");
+  document.querySelectorAll("nav a").forEach(a => a.classList.remove("active"));
+  history.replaceState(null, "", location.pathname);
+}
+document.querySelector("header").onclick = goHome;
+function render(filter = "") {
+  list.innerHTML = "";
+  const f = filter.toLowerCase();
+  CATEGORIES.forEach(c => {
+    const songs = c.songs.filter(s => s.title.toLowerCase().includes(f));
+    if (!songs.length) return;
+    const group = document.createElement("details");
+    const sum = document.createElement("summary");
+    sum.textContent = c.name;
+    const count = document.createElement("span"); count.className = "count"; count.textContent = songs.length;
+    sum.appendChild(count);
+    group.appendChild(sum);
+    if (f) group.open = true; // expand all matches while searching
+    songs.forEach(s => {
+      const a = document.createElement("a"); a.href = "#"; a.textContent = s.title;
+      a.onclick = e => { e.preventDefault(); show(s, a); };
+      group.appendChild(a);
+      if (location.hash && decodeURIComponent(location.hash.slice(1)) === s.title) show(s, a);
+    });
+    list.appendChild(group);
+  });
+}
+document.getElementById("q").oninput = e => render(e.target.value);
+
+// ---------- Password screen (password is set in config.js) ----------
+function opened() {
+  document.body.classList.remove("locked");
+  render();
+}
+document.getElementById("lockForm").onsubmit = e => {
+  e.preventDefault();
+  const pw = document.getElementById("pw").value, err = document.getElementById("lockErr");
+  if (pw === window.SITE_PASSWORD) {
+    sessionStorage.setItem("bhajanaOpen", "1");   // stay unlocked until this browser tab is closed
+    err.textContent = "";
+    opened();
+  } else {
+    err.textContent = "Wrong password. Please try again.";
+  }
+};
+if (sessionStorage.getItem("bhajanaOpen") === "1") opened();
+
+// ---------- Copy protection (allowed only inside the search box) ----------
+const inSearch = e => e.target && e.target.tagName === "INPUT";   // search box and password box
+["copy", "cut", "contextmenu", "selectstart", "dragstart"].forEach(type =>
+  document.addEventListener(type, e => { if (!inSearch(e)) e.preventDefault(); }));
+document.addEventListener("keydown", e => {
+  if (!(e.ctrlKey || e.metaKey) || inSearch(e)) return;
+  const k = e.key.toLowerCase();
+  if (["c", "x", "a", "s", "p", "u"].includes(k)) e.preventDefault();   // copy, cut, select all, save, print, view source
+});
+</script>
+</body>
+</html>
