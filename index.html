@@ -2,15 +2,26 @@
 <html lang="te">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#b3470f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bhajana">
 <title>Ayyappa Bhajana Songs</title>
 <style>
   body { margin:0; font-family: "Noto Sans Telugu", system-ui, sans-serif; background:#fff7ec; color:#2b1b0e; }
   header { background:#b3470f; color:#fff; padding:1rem; text-align:center; }
   header h1 { margin:0; font-size:1.5rem; }
-  .wrap { display:flex; flex-wrap:wrap; max-width:1000px; margin:auto; }
-  nav { flex:1 1 260px; padding:1rem; }
-  main { flex:3 1 400px; padding:1rem; }
+  /* Stacked layout: song index on top, lyrics below it. */
+  .wrap { max-width:760px; margin:auto; }
+  nav { padding:1rem; }
+  main { padding:1rem; border-top:2px solid #f0d2ae; scroll-margin-top:0; }
+  /* Floating "☰ Songs" button: shown while reading lyrics, jumps back up to the index. */
+  #toIndex { position:fixed; top:calc(.6rem + env(safe-area-inset-top)); right:calc(.7rem + env(safe-area-inset-right));
+             z-index:5; display:none; padding:.55rem 1rem; border:0; border-radius:999px; background:#b3470f; color:#fff;
+             font-size:1rem; box-shadow:0 2px 10px rgba(0,0,0,.25); cursor:pointer; touch-action:manipulation; }
+  body.show-to-index #toIndex { display:block; }
+  @media (min-width: 701px) { .toolbar { padding-right:8rem; padding-left:8rem; } }  /* room for the floating button */
   input { width:100%; padding:.5rem; margin-bottom:1rem; box-sizing:border-box; }
   details { margin-bottom:.4rem; border-radius:6px; background:#fde9d2; }
   summary { cursor:pointer; padding:.5rem .7rem; font-weight:bold; color:#b3470f; list-style:none; }
@@ -22,9 +33,8 @@
   details[open] { padding-bottom:.4rem; }
   nav a { display:block; padding:.3rem .5rem; color:inherit; text-decoration:none; border-radius:4px; }
   nav a:hover, nav a.active { background:#f6d6b0; }
-  /* Home view: only the song list, centered. Song view: list on the left, lyrics on the right. */
+  /* Home view: only the song index. Song view: index on top, lyrics below. */
   body.home main { display:none; }
-  body.home nav { flex:0 1 500px; margin:1rem auto; }
   header { cursor:pointer; }
   #title { text-align:center; }
   #lyrics { font-size:1.25rem; line-height:1.8; text-align:center; padding-bottom:60vh; }
@@ -56,6 +66,56 @@
   #lock h2 { margin-top:0; color:#b3470f; }
   #lock button { padding:.5rem 1.2rem; border:0; border-radius:6px; background:#b3470f; color:#fff; font-size:1rem; cursor:pointer; }
   #lockErr { color:#b00020; min-height:1.2em; }
+
+  /* ---------- Touch & mobile friendliness ---------- */
+  html { -webkit-text-size-adjust:100%; }
+  * { -webkit-tap-highlight-color:transparent; }
+  input, select { font-size:16px; }               /* 16px stops iPhone zooming in on focus */
+  button, select, summary, nav a { touch-action:manipulation; }
+  .toolbar button.ghost { background:transparent; color:#b3470f; border:1px solid #e0b98f; }
+  .toolbar select { padding:.3rem; border-radius:6px; border:1px solid #e0b98f; background:#fff; }
+  .speed input { width:100px; margin:0; vertical-align:middle; }
+  #lock input { margin-bottom:.5rem; }
+
+  @media (max-width: 700px) {
+    header { padding:.6rem calc(.6rem + env(safe-area-inset-right)) .6rem calc(.6rem + env(safe-area-inset-left)); }
+    header h1 { font-size:1.1rem; }
+    nav, main { padding:.6rem; }
+
+    /* Bigger touch targets in the song list */
+    summary { padding:.9rem .8rem; font-size:1.05rem; }
+    nav a { padding:.75rem .9rem; font-size:1.05rem; }
+    details a { margin:0 .3rem; }
+    #q { padding:.7rem; border-radius:8px; border:1px solid #e0b98f; }
+
+    #title { font-size:1.2rem; margin:.3rem 0 .8rem; }
+    #lyrics { line-height:1.9; padding-bottom:calc(60vh + 140px); }
+
+    /* Controls move to a bar at the bottom of the screen, within thumb reach */
+    .toolbar { position:fixed; top:auto; bottom:0; left:0; right:0; gap:.4rem; padding:.45rem .4rem;
+               padding-bottom:calc(.45rem + env(safe-area-inset-bottom));
+               border-top:1px solid #f0d2ae; border-bottom:0; box-shadow:0 -2px 8px rgba(0,0,0,.08); }
+    /* Two compact rows: [A−  A+  🎤 Voice  lang]  /  [▶ Auto  speed] */
+    .toolbar .mode { padding:0; gap:.3rem; border:0; background:none; }
+    .toolbar .long { display:none; }
+    .toolbar .nav-mode { order:1; }
+    #voiceMode { order:2; }
+    #speedMode { order:3; flex:1 1 100%; justify-content:center; }
+    #status { order:4; }
+    #speedMode .speed { display:inline-flex; align-items:center; gap:.3rem; flex:1; max-width:260px; }
+    .speed input { flex:1; }
+    .toolbar button { min-height:40px; padding:.35rem .7rem; font-size:.95rem; }
+    .toolbar .lbl { display:none; }
+    .speed input { width:80px; }
+    #status { font-size:.8rem; min-height:0; }
+    #status:empty { display:none; }
+  }
+  @media (max-width: 380px) {
+    .toolbar { gap:.3rem; padding-left:.25rem; padding-right:.25rem; }
+    .toolbar button { padding:.3rem .5rem; font-size:.88rem; }
+    .toolbar select { padding:.25rem .15rem; font-size:14px; }
+    header h1 { font-size:1rem; }
+  }
 </style>
 </head>
 <body class="home locked">
@@ -68,21 +128,26 @@
     <button type="submit">Open</button>
   </form>
 </div>
+<button id="toIndex" title="Go to the song index">☰ Songs</button>
 <header title="Back to song list"><h1>🙏 Swamiye Saranam Ayyappa — Bhajana Songs</h1></header>
 <div class="wrap">
   <nav><input id="q" placeholder="Search songs..."><div id="list"></div></nav>
   <main>
     <div class="toolbar">
+      <span class="mode nav-mode">
+        <button id="smaller" class="ghost" title="Smaller text">A−</button>
+        <button id="bigger" class="ghost" title="Bigger text">A+</button>
+      </span>
       <span class="mode" id="speedMode">
-        <button id="auto">▶ Auto-scroll</button>
-        <label title="How fast the highlight moves (words per minute)">Speed
-          <input id="speed" type="range" min="15" max="150" value="50" style="width:100px;margin:0;vertical-align:middle">
+        <button id="auto">▶ Auto<span class="long">-scroll</span></button>
+        <label class="speed" title="How fast the highlight moves (words per minute)"><span class="lbl">Speed</span>
+          <input id="speed" type="range" min="15" max="150" value="50">
           <span id="speedVal">50</span>/min</label>
       </span>
-      <span class="mode" id="voiceMode"><button id="voice">🎤 Voice follow</button>
+      <span class="mode" id="voiceMode"><button id="voice">🎤 Voice<span class="long"> follow</span></button>
         <select id="vlang" title="Recognition language (try English if Telugu isn't picking up)">
           <option value="te-IN">Telugu</option>
-          <option value="en-IN">English (India)</option>
+          <option value="en-IN">English</option>
         </select></span>
       <div id="status"></div>
     </div>
@@ -103,16 +168,50 @@ function formatLyrics(raw) {
   if (filled > 4 && blanks >= filled - 2) lines = lines.filter(Boolean);
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
+let currentTitle = null;
 function show(song, el) {
   document.querySelectorAll("nav a").forEach(a => a.classList.remove("active"));
-  el.classList.add("active");
+  if (el) el.classList.add("active");
   document.getElementById("title").textContent = song.title;
   stopAuto();
   renderLyrics(formatLyrics((window.LYRICS || {})[song.title] || song.lyrics || ""));
-  location.hash = encodeURIComponent(song.title);
+  currentTitle = song.title;
+  // Adds a history entry, so the phone's Back button returns to the song list.
+  const h = "#" + encodeURIComponent(song.title);
+  if (location.hash !== h) location.hash = h;
   document.body.classList.remove("home");
-  window.scrollTo(0, 0);
+  // Lyrics sit below the index: scroll down so the song title is at the top of the screen.
+  requestAnimationFrame(() => document.querySelector("main").scrollIntoView({ block: "start" }));
+  updateToIndex();
+  keepAwake(true);
 }
+
+// ---------- Keep the phone screen on while a song is open (Screen Wake Lock API) ----------
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && !wakeLock && "wakeLock" in navigator && document.visibilityState === "visible") {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch { wakeLock = null; }
+}
+// The lock is dropped when the tab is hidden; take it again when the user comes back.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && !document.body.classList.contains("home")) keepAwake(true);
+});
+
+// ---------- Text size (A− / A+), remembered on this device ----------
+let fontSize = parseFloat(localStorage.getItem("bhajanaFont")) || 1.25;
+function applyFont() { document.getElementById("lyrics").style.fontSize = fontSize + "rem"; }
+function changeFont(d) {
+  fontSize = Math.min(2.4, Math.max(0.9, +(fontSize + d).toFixed(2)));
+  localStorage.setItem("bhajanaFont", fontSize);
+  applyFont();
+}
+document.getElementById("smaller").onclick = () => changeFont(-0.15);
+document.getElementById("bigger").onclick = () => changeFont(0.15);
+applyFont();
 
 // ---------- Lyrics rendering (one <span> per word, so we can highlight word by word) ----------
 let words = [];    // [{ el, key, line }]
@@ -238,7 +337,7 @@ function begin(mode) {
 // ----- Mode 1: Auto-scroll with speed -----
 function startSpeed() {
   if (!begin("speed")) return;
-  speedBtn.textContent = "⏸ Pause"; speedBtn.classList.add("on");
+  speedBtn.innerHTML = "⏸ Pause"; speedBtn.classList.add("on");
   setStatus("Auto-scrolling at the selected speed. Click any word to jump there.");
   let last = performance.now();
   const tick = now => {
@@ -261,7 +360,7 @@ function startVoice() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { setStatus("Voice follow needs Chrome or Edge (speech recognition not supported in this browser)."); return; }
   if (!begin("voice")) return;
-  voiceBtn.textContent = "⏹ Stop voice"; voiceBtn.classList.add("on");
+  voiceBtn.innerHTML = "⏹ Stop<span class=\"long\"> voice</span>"; voiceBtn.classList.add("on");
   voice.misses = 0; voice.lastMatch = performance.now();
   const r = new SR();
   r.lang = document.getElementById("vlang").value;
@@ -361,19 +460,50 @@ function stopAuto() {
   auto.mode = null;
   cancelAnimationFrame(auto.raf);
   if (auto.rec) { const r = auto.rec; auto.rec = null; try { r.abort(); } catch {} }
-  speedBtn.textContent = "▶ Auto-scroll"; speedBtn.classList.remove("on");
-  voiceBtn.textContent = "🎤 Voice follow"; voiceBtn.classList.remove("on");
+  speedBtn.innerHTML = "▶ Auto<span class=\"long\">-scroll</span>"; speedBtn.classList.remove("on");
+  voiceBtn.innerHTML = "🎤 Voice<span class=\"long\"> follow</span>"; voiceBtn.classList.remove("on");
   lockOther(null);
   setStatus("");
 }
 
 function goHome() {
   stopAuto();
+  keepAwake(false);
+  currentTitle = null;
   document.body.classList.add("home");
   document.querySelectorAll("nav a").forEach(a => a.classList.remove("active"));
-  history.replaceState(null, "", location.pathname);
+  if (location.hash) history.replaceState(null, "", location.pathname);
+  window.scrollTo(0, 0);
+  updateToIndex();
 }
 document.querySelector("header").onclick = goHome;
+
+// Floating "☰ Songs" button: visible while a song is open and the index has scrolled out of view.
+// Tapping it stops auto-scroll / voice follow (so it doesn't pull the page back down) and goes to the index.
+const navEl = document.querySelector("nav");
+function updateToIndex() {
+  const indexVisible = navEl.getBoundingClientRect().bottom > 40;   // any of the index still on screen
+  document.body.classList.toggle("show-to-index", !document.body.classList.contains("home") && !indexVisible);
+}
+window.addEventListener("scroll", updateToIndex, { passive: true });
+window.addEventListener("resize", updateToIndex);
+document.getElementById("toIndex").onclick = () => {
+  stopAuto();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+// Open the song named in the URL (#Song Title), or the list if there is none.
+// Runs on start-up and whenever the URL changes (e.g. the phone's Back button).
+function route() {
+  const t = location.hash ? decodeURIComponent(location.hash.slice(1)) : "";
+  if (!t) { if (!document.body.classList.contains("home")) goHome(); return; }
+  if (t === currentTitle) return;
+  const song = CATEGORIES.flatMap(c => c.songs).find(s => s.title === t);
+  if (!song) { goHome(); return; }
+  const link = [...document.querySelectorAll("nav a")].find(a => a.textContent === t);
+  show(song, link);
+}
+window.addEventListener("hashchange", route);
 function render(filter = "") {
   list.innerHTML = "";
   const f = filter.toLowerCase();
@@ -390,8 +520,8 @@ function render(filter = "") {
     songs.forEach(s => {
       const a = document.createElement("a"); a.href = "#"; a.textContent = s.title;
       a.onclick = e => { e.preventDefault(); show(s, a); };
+      if (s.title === currentTitle) a.classList.add("active");
       group.appendChild(a);
-      if (location.hash && decodeURIComponent(location.hash.slice(1)) === s.title) show(s, a);
     });
     list.appendChild(group);
   });
@@ -402,6 +532,7 @@ document.getElementById("q").oninput = e => render(e.target.value);
 function opened() {
   document.body.classList.remove("locked");
   render();
+  route();
 }
 document.getElementById("lockForm").onsubmit = e => {
   e.preventDefault();
