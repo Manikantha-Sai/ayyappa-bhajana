@@ -1,0 +1,10 @@
+{
+  "name": "ayyappa-bhajana",
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
