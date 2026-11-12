@@ -87,7 +87,7 @@
   .toolbar select { padding:.3rem; border-radius:6px; border:1px solid #e0b98f; background:#fff; }
   .speed input { width:100px; margin:0; vertical-align:middle; }
 
-  #tbHandle { display:none; }                     /* resize handle is only for the phone bottom bar */
+  #tbHandle, #tbHide { display:none; }            /* resize handle and hide button are only for the phone bar */
   @media (max-width: 700px) {
     header { padding:.6rem calc(.6rem + env(safe-area-inset-right)) .6rem calc(.6rem + env(safe-area-inset-left)); }
     header h1 { font-size:1.1rem; }
@@ -128,6 +128,10 @@
     #tbHandle { display:flex; order:0; flex:1 1 100%; justify-content:center; align-items:center;
                 height:1.6em; margin:0 -.4em -.2em; cursor:ns-resize; touch-action:none; }
     #tbHandle::before { content:""; width:3em; height:.32em; border-radius:1em; background:#d9b48c; }
+    /* ▼ button at the top right of the bar: hides it into the small strip */
+    .toolbar #tbHide { display:block; position:absolute; top:.15em; right:.4em; min-height:0; width:2.2em; height:1.9em;
+                       padding:0; border-radius:.5em; background:transparent; color:#b3470f; border:1px solid #e0b98f;
+                       font-size:.85em; line-height:1; }
     .toolbar.folded { gap:0; padding-bottom:calc(.15em + env(safe-area-inset-bottom)); }
     .toolbar.folded > :not(#tbHandle) { display:none; }
     .toolbar.folded #tbHandle::after { content:"▲ tap to show controls"; margin-left:.6em; font-size:.75em; color:#b3470f; }
@@ -153,6 +157,7 @@
   <main>
     <div class="toolbar">
       <div id="tbHandle" title="Drag up: bigger. Drag down: smaller, then hide. Tap the small bar to show the controls again."></div>
+      <button id="tbHide" title="Hide the controls">▼</button>
       <span class="mode nav-mode">
         <button id="smaller" class="ghost" title="Smaller text">A−</button>
         <button id="bigger" class="ghost" title="Bigger text">A+</button>
@@ -308,11 +313,10 @@ const TB_MIN = 0.7, TB_MAX = 1.6;
 const HIDE_AFTER = 45;                                  // px dragged down past the smallest size
 function applyBar() { toolbarEl.style.setProperty("--tb", tbScale); }
 applyBar();
-function setFolded(f) {
-  toolbarEl.classList.toggle("folded", f);
-  localStorage.setItem("bhajanaBarFolded", f ? "1" : "0");
-}
-if (localStorage.getItem("bhajanaBarFolded") === "1") toolbarEl.classList.add("folded");
+function setFolded(f) { toolbarEl.classList.toggle("folded", f); }
+// The bar always starts hidden (small strip); tap the strip to show the controls.
+setFolded(true);
+document.getElementById("tbHide").onclick = () => setFolded(true);
 let drag = null;
 handle.addEventListener("pointerdown", e => {
   drag = { y: e.clientY, start: tbScale, moved: false, hide: false };
