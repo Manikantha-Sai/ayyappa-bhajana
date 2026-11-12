@@ -20,7 +20,6 @@ const CATEGORIES = [
     { title: "Sivude Dhevudani" },
   ]},
   { name: "Amma vaari Songs", bg: "amma", songs: [
-    { title: "Dhigu Dhigu Naga" },
   ]},
   { name: "Ayyappa Songs", bg: "ayyappa", songs: [
     { title: "Raava Ayyappa Swamy" },
@@ -32,5 +31,6 @@ const CATEGORIES = [
     { title: "Bhagavan Sharanam" },
     { title: "Akkada Unnavayyappa" },
     { title: "Oogu Oogu Uyyala" },
+    { title: "Dhigu Dhigu Naga" },
   ]},
 ];
