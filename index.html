@@ -16,12 +16,31 @@
   .wrap { max-width:760px; margin:auto; }
   nav { padding:1rem; }
   main { padding:1rem; border-top:2px solid #f0d2ae; scroll-margin-top:0; }
-  /* Floating "☰ Songs" button: shown while reading lyrics, jumps back up to the index. */
-  #toIndex { position:fixed; top:calc(.6rem + env(safe-area-inset-top)); right:calc(.7rem + env(safe-area-inset-right));
-             z-index:5; display:none; padding:.55rem 1rem; border:0; border-radius:999px; background:#b3470f; color:#fff;
-             font-size:1rem; box-shadow:0 2px 10px rgba(0,0,0,.25); cursor:pointer; touch-action:manipulation; }
+  /* God picture / emblem faintly behind the lyrics (fixed, so it stays while the lyrics scroll). */
+  #godBg { position:fixed; inset:12vh 4vw 14vh; z-index:-1; pointer-events:none; opacity:0;
+           background:center / contain no-repeat; transition:opacity .4s; }
+  body:not(.home) #godBg.ready { opacity:var(--bg-opacity, .12); }
+  #godBg.photo { inset:4vh 2vw 8vh; }               /* photos: a bit larger, still whole (not cropped) */
+  /* "Songs" tab on the middle of the left edge: shown while reading lyrics; tap it and the
+     song index slides out from the left as a drawer. */
+  #toIndex { position:fixed; left:0; top:50%; transform:translateY(-50%); z-index:5; display:none;
+             padding:.8rem .45rem; padding-left:calc(.45rem + env(safe-area-inset-left));
+             border:0; border-radius:0 12px 12px 0; background:#b3470f; color:#fff; font-size:1rem; line-height:1.1;
+             box-shadow:2px 0 10px rgba(0,0,0,.25); cursor:pointer; touch-action:manipulation; text-align:center; }
+  #toIndex .vt { writing-mode:vertical-rl; display:inline-block; margin-top:.3rem; letter-spacing:.05em; }
   body.show-to-index #toIndex { display:block; }
-  @media (min-width: 701px) { .toolbar { padding-right:8rem; padding-left:8rem; } }  /* room for the floating button */
+  #scrim { position:fixed; inset:0; z-index:19; background:rgba(0,0,0,.35); opacity:0; pointer-events:none; transition:opacity .25s; }
+  #drawer { position:fixed; top:0; bottom:0; left:0; z-index:20; width:min(85vw, 340px); background:#fff7ec;
+            transform:translateX(-105%); transition:transform .25s ease; box-shadow:4px 0 16px rgba(0,0,0,.25);
+            display:flex; flex-direction:column; padding-top:env(safe-area-inset-top); padding-left:env(safe-area-inset-left); }
+  body.drawer-open #drawer { transform:translateX(0); }
+  body.drawer-open #scrim { opacity:1; pointer-events:auto; }
+  #drawer .dhead { display:flex; align-items:center; justify-content:space-between; background:#b3470f; color:#fff;
+                   padding:.6rem .8rem; font-size:1.1rem; font-weight:bold; }
+  #drawerClose { background:none; border:0; color:#fff; font-size:1.4rem; line-height:1; padding:.2rem .5rem; cursor:pointer; }
+  #drawer .dbody { overflow-y:auto; overscroll-behavior:contain; padding:.7rem; flex:1; }
+  #drawer a { display:block; padding:.7rem .8rem; color:inherit; text-decoration:none; border-radius:4px; }
+  #drawer a.active { background:#f6d6b0; }
   input { width:100%; padding:.5rem; margin-bottom:1rem; box-sizing:border-box; }
   details { margin-bottom:.4rem; border-radius:6px; background:#fde9d2; }
   summary { cursor:pointer; padding:.5rem .7rem; font-weight:bold; color:#b3470f; list-style:none; }
@@ -36,13 +55,13 @@
   /* Home view: only the song index. Song view: index on top, lyrics below. */
   body.home main { display:none; }
   header { cursor:pointer; }
-  #title { text-align:center; }
-  #lyrics { font-size:1.25rem; line-height:1.8; text-align:center; padding-bottom:60vh; }
+  #title { text-align:center; color:#b3470f; }
+  #lyrics { color:#000; font-weight:700; -webkit-text-stroke:.35px currentColor; letter-spacing:.02em; word-spacing:.1em; font-size:1.25rem; line-height:1.8; text-align:center; padding-bottom:60vh; }
   #lyrics .line { white-space:pre-wrap; padding:0 .3rem; border-radius:4px; transition:background .3s; cursor:pointer; }
   #lyrics .line.cur { background:#fff1c9; }
   #lyrics .w { cursor:pointer; border-radius:3px; padding:0 .05em; transition:background .15s, color .15s; }
-  #lyrics .w.done { color:#b3470f; }
-  #lyrics .w.now { background:#ffc83d; color:#2b1b0e; }
+  #lyrics .w.done { color:#8f3307; }
+  #lyrics .w.now { background:#ffc83d; color:#000; }
   #lyrics .gap { height:1em; }
   .toolbar { position:sticky; top:0; z-index:1; background:#fff7ec; padding:.5rem 0; display:flex; gap:.6rem;
              align-items:center; justify-content:center; flex-wrap:wrap; border-bottom:1px solid #f0d2ae; font-size:.9rem; }
@@ -77,6 +96,7 @@
   .speed input { width:100px; margin:0; vertical-align:middle; }
   #lock input { margin-bottom:.5rem; }
 
+  #tbHandle { display:none; }                     /* resize handle is only for the phone bottom bar */
   @media (max-width: 700px) {
     header { padding:.6rem calc(.6rem + env(safe-area-inset-right)) .6rem calc(.6rem + env(safe-area-inset-left)); }
     header h1 { font-size:1.1rem; }
@@ -92,28 +112,38 @@
     #lyrics { line-height:1.9; padding-bottom:calc(60vh + 140px); }
 
     /* Controls move to a bar at the bottom of the screen, within thumb reach */
-    .toolbar { position:fixed; top:auto; bottom:0; left:0; right:0; gap:.4rem; padding:.45rem .4rem;
-               padding-bottom:calc(.45rem + env(safe-area-inset-bottom));
+    /* Everything in the bar is sized in "em", so one number (--tb, set by dragging the handle)
+       scales the whole bar up or down. */
+    .toolbar { position:fixed; top:auto; bottom:0; left:0; right:0;
+               font-size:calc(15px * var(--tb, 1)); gap:.45em; padding:0 .4em .5em;
+               padding-bottom:calc(.5em + env(safe-area-inset-bottom));
                border-top:1px solid #f0d2ae; border-bottom:0; box-shadow:0 -2px 8px rgba(0,0,0,.08); }
     /* Two compact rows: [A−  A+  🎤 Voice  lang]  /  [▶ Auto  speed] */
-    .toolbar .mode { padding:0; gap:.3rem; border:0; background:none; }
+    .toolbar .mode { padding:0; gap:.35em; border:0; background:none; }
     .toolbar .long { display:none; }
     .toolbar .nav-mode { order:1; }
     #voiceMode { order:2; }
     #speedMode { order:3; flex:1 1 100%; justify-content:center; }
     #status { order:4; }
-    #speedMode .speed { display:inline-flex; align-items:center; gap:.3rem; flex:1; max-width:260px; }
-    .speed input { flex:1; }
-    .toolbar button { min-height:40px; padding:.35rem .7rem; font-size:.95rem; }
+    #speedMode .speed { display:inline-flex; align-items:center; gap:.3em; flex:1; max-width:18em; }
+    .speed input { flex:1; width:5em; height:1.6em; }
+    .toolbar button { min-height:2.7em; padding:.35em .75em; font-size:1em; }
+    .toolbar select { font-size:max(16px, 1em); padding:.3em .2em; }   /* ≥16px so iPhone doesn't zoom */
     .toolbar .lbl { display:none; }
-    .speed input { width:80px; }
-    #status { font-size:.8rem; min-height:0; }
+    #status { font-size:.8em; min-height:0; }
     #status:empty { display:none; }
+
+    /* Grab handle: drag up = bigger, drag down = smaller, tap = fold the bar away / back */
+    #tbHandle { display:flex; order:0; flex:1 1 100%; justify-content:center; align-items:center;
+                height:1.6em; margin:0 -.4em -.2em; cursor:ns-resize; touch-action:none; }
+    #tbHandle::before { content:""; width:3em; height:.32em; border-radius:1em; background:#d9b48c; }
+    .toolbar.folded { gap:0; padding-bottom:calc(.15em + env(safe-area-inset-bottom)); }
+    .toolbar.folded > :not(#tbHandle) { display:none; }
+    .toolbar.folded #tbHandle::after { content:"▲ controls"; margin-left:.6em; font-size:.75em; color:#b3470f; }
   }
   @media (max-width: 380px) {
-    .toolbar { gap:.3rem; padding-left:.25rem; padding-right:.25rem; }
-    .toolbar button { padding:.3rem .5rem; font-size:.88rem; }
-    .toolbar select { padding:.25rem .15rem; font-size:14px; }
+    .toolbar { gap:.3em; padding-left:.25em; padding-right:.25em; }
+    .toolbar button { padding:.3em .55em; }
     header h1 { font-size:1rem; }
   }
 </style>
@@ -128,12 +158,19 @@
     <button type="submit">Open</button>
   </form>
 </div>
-<button id="toIndex" title="Go to the song index">☰ Songs</button>
+<button id="toIndex" title="Show the song index">☰<br><span class="vt">Songs</span></button>
+<div id="godBg"></div>
+<div id="scrim"></div>
+<aside id="drawer" aria-label="Song index">
+  <div class="dhead"><span>☰ Songs</span><button id="drawerClose" title="Close">✕</button></div>
+  <div class="dbody"><input id="dq" placeholder="Search songs..."><div id="dlist"></div></div>
+</aside>
 <header title="Back to song list"><h1>🙏 Swamiye Saranam Ayyappa — Bhajana Songs</h1></header>
 <div class="wrap">
   <nav><input id="q" placeholder="Search songs..."><div id="list"></div></nav>
   <main>
     <div class="toolbar">
+      <div id="tbHandle" title="Drag up or down to resize the controls. Tap to hide or show them."></div>
       <span class="mode nav-mode">
         <button id="smaller" class="ghost" title="Smaller text">A−</button>
         <button id="bigger" class="ghost" title="Bigger text">A+</button>
@@ -176,6 +213,7 @@ function show(song, el) {
   stopAuto();
   renderLyrics(formatLyrics((window.LYRICS || {})[song.title] || song.lyrics || ""));
   currentTitle = song.title;
+  setGodBg(song.title);
   // Adds a history entry, so the phone's Back button returns to the song list.
   const h = "#" + encodeURIComponent(song.title);
   if (location.hash !== h) location.hash = h;
@@ -184,6 +222,70 @@ function show(song, el) {
   requestAnimationFrame(() => document.querySelector("main").scrollIntoView({ block: "start" }));
   updateToIndex();
   keepAwake(true);
+}
+
+// ---------- God picture behind the lyrics ----------
+// Each category in songs.js has a "bg" key. If images/<bg>.jpg/.jpeg/.png/.webp exists it is used
+// (a photo you add yourself); otherwise a simple built-in emblem is drawn for that deity.
+const C = "#b3470f";
+const svg = body => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" stroke="${C}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`);
+const EMBLEMS = {
+  // Vinayaka: Omkara inside a circle
+  vinayaka: svg(`<circle cx="100" cy="100" r="88"/><circle cx="100" cy="100" r="78" stroke-width="1.5"/>
+    <text x="100" y="138" font-size="118" text-anchor="middle" fill="${C}" stroke="none"
+      font-family="Nirmala UI, Noto Sans Devanagari, Kohinoor Devanagari, sans-serif">ॐ</text>`),
+  // Subramanya: the Vel (spear)
+  subramanya: svg(`<path d="M100 12 C132 46 132 76 100 94 C68 76 68 46 100 12 Z"/>
+    <path d="M100 32 C116 52 116 68 100 78 C84 68 84 52 100 32 Z" stroke-width="2.5"/>
+    <path d="M100 94 V190"/><path d="M84 100 H116"/><circle cx="100" cy="58" r="5" fill="${C}"/>`),
+  // Venkateswara: Tirunamam
+  venkateswara: svg(`<path d="M62 28 V112 Q62 168 100 168 Q138 168 138 112 V28" stroke-width="13"/>
+    <path d="M100 36 V150" stroke="#c62828" stroke-width="11"/><path d="M70 182 H130" stroke-width="3"/>`),
+  // Shiva: Trishul with damaru
+  shiva: svg(`<path d="M100 12 L109 58 H91 Z" fill="${C}"/><path d="M58 28 C58 66 78 80 100 80 C122 80 142 66 142 28"/>
+    <path d="M100 58 V192"/><path d="M84 116 L116 116 L100 132 Z M84 148 L116 148 L100 132 Z" fill="${C}"/>
+    <path d="M152 36 a18 18 0 1 0 22 26 a14 14 0 1 1 -22 -26 Z" fill="${C}" stroke="none"/>`),
+  // Amma vaari: lotus with kumkum bindu
+  amma: svg(`<path d="M100 62 C122 92 122 130 100 152 C78 130 78 92 100 62 Z"/>
+    <path d="M100 152 C72 142 52 112 56 82 C80 96 96 122 100 152 Z"/><path d="M100 152 C128 142 148 112 144 82 C120 96 104 122 100 152 Z"/>
+    <path d="M100 152 C62 152 32 134 24 112 C56 106 86 126 100 152 Z"/><path d="M100 152 C138 152 168 134 176 112 C144 106 114 126 100 152 Z"/>
+    <path d="M38 168 H162" stroke-width="3"/><circle cx="100" cy="40" r="7" fill="#c62828" stroke="none"/>`),
+  // Ayyappa: Sabarimala hill, the holy steps and Makara Jyothi
+  ayyappa: svg(`<path d="M18 176 L100 64 L182 176 Z"/>
+    ${[0,1,2,3,4,5,6,7,8].map(i => `<path d="M${72 + i*3} ${172 - i*9} H${128 - i*3}" stroke-width="2.5"/>`).join("")}
+    <path d="M100 14 C113 30 111 43 100 50 C89 43 87 30 100 14 Z" fill="${C}"/>
+    <path d="M100 4 V8 M78 22 L82 25 M122 22 L118 25 M72 42 H77 M128 42 H123" stroke-width="2.5"/>`),
+};
+const bgCache = {};
+function findPhoto(key) {
+  if (key in bgCache) return Promise.resolve(bgCache[key]);
+  const tries = ["jpg", "jpeg", "png", "webp"].map(ext => `images/${key}.${ext}`);
+  return new Promise(done => {
+    const next = i => {
+      if (i >= tries.length) { bgCache[key] = null; return done(null); }
+      const img = new Image();
+      img.onload = () => { bgCache[key] = tries[i]; done(tries[i]); };
+      img.onerror = () => next(i + 1);
+      img.src = tries[i];
+    };
+    next(0);
+  });
+}
+let bgFor = null;
+async function setGodBg(title) {
+  const el = document.getElementById("godBg");
+  const cat = CATEGORIES.find(c => c.songs.some(s => s.title === title));
+  const key = cat && cat.bg;
+  bgFor = key;
+  el.classList.remove("ready", "photo");
+  if (!key) return;
+  const photo = await findPhoto(key);
+  if (bgFor !== key) return;                           // another song was opened meanwhile
+  el.style.backgroundImage = `url("${photo || EMBLEMS[key] || ""}")`;
+  el.classList.toggle("photo", !!photo);
+  el.style.setProperty("--bg-opacity", photo ? ".16" : ".12");
+  el.classList.add("ready");
 }
 
 // ---------- Keep the phone screen on while a song is open (Screen Wake Lock API) ----------
@@ -212,6 +314,40 @@ function changeFont(d) {
 document.getElementById("smaller").onclick = () => changeFont(-0.15);
 document.getElementById("bigger").onclick = () => changeFont(0.15);
 applyFont();
+
+// ---------- Phone bottom bar: drag the handle to resize, tap it to fold/unfold ----------
+// Size and folded state are remembered on this device.
+const toolbarEl = document.querySelector(".toolbar"), handle = document.getElementById("tbHandle");
+let tbScale = parseFloat(localStorage.getItem("bhajanaBar")) || 1;
+const TB_MIN = 0.7, TB_MAX = 1.6;
+function applyBar() { toolbarEl.style.setProperty("--tb", tbScale); }
+applyBar();
+if (localStorage.getItem("bhajanaBarFolded") === "1") toolbarEl.classList.add("folded");
+let drag = null;
+handle.addEventListener("pointerdown", e => {
+  drag = { y: e.clientY, start: tbScale, moved: false };
+  try { handle.setPointerCapture(e.pointerId); } catch {}   // keep getting moves even if the finger leaves the handle
+  e.preventDefault();
+});
+handle.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const dy = drag.y - e.clientY;                     // positive = dragged up
+  if (Math.abs(dy) > 6) drag.moved = true;
+  if (!drag.moved || toolbarEl.classList.contains("folded")) return;
+  tbScale = Math.min(TB_MAX, Math.max(TB_MIN, +(drag.start + dy / 160).toFixed(3)));
+  applyBar();
+});
+handle.addEventListener("pointerup", () => {
+  if (!drag) return;
+  if (!drag.moved) {                                   // a tap: fold or unfold the bar
+    const folded = toolbarEl.classList.toggle("folded");
+    localStorage.setItem("bhajanaBarFolded", folded ? "1" : "0");
+  } else {
+    localStorage.setItem("bhajanaBar", tbScale);
+  }
+  drag = null;
+});
+handle.addEventListener("pointercancel", () => { drag = null; });
 
 // ---------- Lyrics rendering (one <span> per word, so we can highlight word by word) ----------
 let words = [];    // [{ el, key, line }]
@@ -356,9 +492,48 @@ function startSpeed() {
 
 // ----- Mode 2: Auto-scroll with voice recognition -----
 const voice = { misses: 0, lastMatch: 0, restartTimer: 0 };
-function startVoice() {
+// Explains why the microphone can't be used, in plain words for phone users.
+const MIC_HELP = {
+  insecure: "Voice follow needs the site to be opened from a secure https:// address " +
+            "(e.g. your vercel.app link). Phones block the microphone on file:// and http:// pages.",
+  blocked: "Microphone is blocked for this site. Tap the lock / ⓘ icon next to the address bar → " +
+           "Permissions → Microphone → Allow, then reload. (Android: also check Settings → Apps → " +
+           "Chrome → Permissions → Microphone.)",
+  nomic: "No microphone was found on this device.",
+  busy: "The microphone is being used by another app (call, recorder…). Close it and try again.",
+  unsupported: "This browser can't do speech recognition. On Android use Chrome; on iPhone use Safari.",
+  network: "Voice follow needs an internet connection (speech is recognised online).",
+  service: "Speech recognition is turned off or not available in this browser. " +
+           "Try Chrome (Android) or Safari (iPhone), and check that Google / Siri speech is enabled.",
+};
+
+// Ask for the microphone directly: this is what makes the browser show the "Allow microphone?" pop-up.
+// (Some phones never show it when only speech recognition asks.)
+async function askMicrophone() {
+  if (!window.isSecureContext) return "insecure";
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return "insecure";
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+    s.getTracks().forEach(t => t.stop());            // release it; speech recognition opens its own
+    return null;
+  } catch (e) {
+    if (e.name === "NotAllowedError" || e.name === "SecurityError") return "blocked";
+    if (e.name === "NotFoundError" || e.name === "OverconstrainedError") return "nomic";
+    if (e.name === "NotReadableError" || e.name === "AbortError") return "busy";
+    return "blocked";
+  }
+}
+
+async function startVoice() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { setStatus("Voice follow needs Chrome or Edge (speech recognition not supported in this browser)."); return; }
+  if (!SR) { setStatus(MIC_HELP.unsupported); return; }
+  if (!words.length) { setStatus("No lyrics to follow."); return; }
+  if (voice.asking) return;                            // ignore double taps while the pop-up is open
+  voice.asking = true;
+  setStatus("Asking for microphone permission…");
+  const problem = await askMicrophone();
+  voice.asking = false;
+  if (problem) { setStatus(MIC_HELP[problem]); return; }
   if (!begin("voice")) return;
   voiceBtn.innerHTML = "⏹ Stop<span class=\"long\"> voice</span>"; voiceBtn.classList.add("on");
   voice.misses = 0; voice.lastMatch = performance.now();
@@ -385,9 +560,11 @@ function startVoice() {
     }
   };
   r.onerror = e => {
-    if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "network") {
-      stopAuto(); setStatus("Voice follow unavailable (" + e.error + "). Check microphone permission and internet.");
-    } // "no-speech" / "aborted" are normal during pauses: onend restarts listening.
+    const why = { "not-allowed": window.isSecureContext ? "blocked" : "insecure",
+                  "service-not-allowed": "service", "network": "network",
+                  "audio-capture": "nomic", "language-not-supported": "service" }[e.error];
+    if (why) { stopAuto(); setStatus(MIC_HELP[why]); }
+    // "no-speech" / "aborted" are normal during pauses: onend restarts listening.
   };
   // Chrome ends recognition after silence or ~1 minute; restart after a short delay.
   r.onend = () => {
@@ -478,8 +655,8 @@ function goHome() {
 }
 document.querySelector("header").onclick = goHome;
 
-// Floating "☰ Songs" button: visible while a song is open and the index has scrolled out of view.
-// Tapping it stops auto-scroll / voice follow (so it doesn't pull the page back down) and goes to the index.
+// "Songs" tab (middle of the left edge): visible while a song is open and the index has scrolled
+// out of view. Tapping it slides the song index out as a drawer; picking a song closes it.
 const navEl = document.querySelector("nav");
 function updateToIndex() {
   const indexVisible = navEl.getBoundingClientRect().bottom > 40;   // any of the index still on screen
@@ -487,10 +664,17 @@ function updateToIndex() {
 }
 window.addEventListener("scroll", updateToIndex, { passive: true });
 window.addEventListener("resize", updateToIndex);
-document.getElementById("toIndex").onclick = () => {
-  stopAuto();
-  window.scrollTo({ top: 0, behavior: "smooth" });
-};
+const dq = document.getElementById("dq");
+function openDrawer() {
+  buildIndex(document.getElementById("dlist"), dq.value, true);
+  document.body.classList.add("drawer-open");
+}
+function closeDrawer() { document.body.classList.remove("drawer-open"); }
+document.getElementById("toIndex").onclick = openDrawer;
+document.getElementById("drawerClose").onclick = closeDrawer;
+document.getElementById("scrim").onclick = closeDrawer;
+dq.oninput = () => buildIndex(document.getElementById("dlist"), dq.value, true);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
 
 // Open the song named in the URL (#Song Title), or the list if there is none.
 // Runs on start-up and whenever the URL changes (e.g. the phone's Back button).
@@ -504,8 +688,11 @@ function route() {
   show(song, link);
 }
 window.addEventListener("hashchange", route);
-function render(filter = "") {
-  list.innerHTML = "";
+function render(filter = "") { buildIndex(list, filter, false); }
+// Builds the category drop-downs into `container` (the main index, or the drawer).
+// In the drawer, the current song's category starts open and picking a song closes the drawer.
+function buildIndex(container, filter = "", inDrawer) {
+  container.innerHTML = "";
   const f = filter.toLowerCase();
   CATEGORIES.forEach(c => {
     const songs = c.songs.filter(s => s.title.toLowerCase().includes(f));
@@ -517,13 +704,21 @@ function render(filter = "") {
     sum.appendChild(count);
     group.appendChild(sum);
     if (f) group.open = true; // expand all matches while searching
+    if (inDrawer && songs.some(s => s.title === currentTitle)) group.open = true;
     songs.forEach(s => {
       const a = document.createElement("a"); a.href = "#"; a.textContent = s.title;
-      a.onclick = e => { e.preventDefault(); show(s, a); };
+      a.onclick = e => {
+        e.preventDefault();
+        if (inDrawer) {
+          closeDrawer();
+          // Highlight the song in the main index too.
+          show(s, [...list.querySelectorAll("a")].find(x => x.textContent === s.title));
+        } else show(s, a);
+      };
       if (s.title === currentTitle) a.classList.add("active");
       group.appendChild(a);
     });
-    list.appendChild(group);
+    container.appendChild(group);
   });
 }
 document.getElementById("q").oninput = e => render(e.target.value);
