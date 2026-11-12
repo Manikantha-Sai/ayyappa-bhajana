@@ -77,14 +77,6 @@
   body { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
   input { -webkit-user-select:text; user-select:text; }
   @media print { body { display:none; } }
-  /* Password screen */
-  body.locked header, body.locked .wrap { display:none; }
-  #lock { display:none; min-height:100vh; align-items:center; justify-content:center; }
-  body.locked #lock { display:flex; }
-  #lock form { background:#fde9d2; padding:2rem; border-radius:12px; text-align:center; width:min(90vw, 340px); }
-  #lock h2 { margin-top:0; color:#b3470f; }
-  #lock button { padding:.5rem 1.2rem; border:0; border-radius:6px; background:#b3470f; color:#fff; font-size:1rem; cursor:pointer; }
-  #lockErr { color:#b00020; min-height:1.2em; }
 
   /* ---------- Touch & mobile friendliness ---------- */
   html { -webkit-text-size-adjust:100%; }
@@ -94,7 +86,6 @@
   .toolbar button.ghost { background:transparent; color:#b3470f; border:1px solid #e0b98f; }
   .toolbar select { padding:.3rem; border-radius:6px; border:1px solid #e0b98f; background:#fff; }
   .speed input { width:100px; margin:0; vertical-align:middle; }
-  #lock input { margin-bottom:.5rem; }
 
   #tbHandle { display:none; }                     /* resize handle is only for the phone bottom bar */
   @media (max-width: 700px) {
@@ -139,7 +130,7 @@
     #tbHandle::before { content:""; width:3em; height:.32em; border-radius:1em; background:#d9b48c; }
     .toolbar.folded { gap:0; padding-bottom:calc(.15em + env(safe-area-inset-bottom)); }
     .toolbar.folded > :not(#tbHandle) { display:none; }
-    .toolbar.folded #tbHandle::after { content:"▲ controls"; margin-left:.6em; font-size:.75em; color:#b3470f; }
+    .toolbar.folded #tbHandle::after { content:"▲ tap to show controls"; margin-left:.6em; font-size:.75em; color:#b3470f; }
   }
   @media (max-width: 380px) {
     .toolbar { gap:.3em; padding-left:.25em; padding-right:.25em; }
@@ -148,16 +139,7 @@
   }
 </style>
 </head>
-<body class="home locked">
-<div id="lock">
-  <form id="lockForm">
-    <h2>🙏 Swamiye Saranam Ayyappa</h2>
-    <p>Enter the password to open the bhajana songs.</p>
-    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" autofocus>
-    <p id="lockErr"></p>
-    <button type="submit">Open</button>
-  </form>
-</div>
+<body class="home">
 <button id="toIndex" title="Show the song index">☰<br><span class="vt">Songs</span></button>
 <div id="godBg"></div>
 <div id="scrim"></div>
@@ -170,7 +152,7 @@
   <nav><input id="q" placeholder="Search songs..."><div id="list"></div></nav>
   <main>
     <div class="toolbar">
-      <div id="tbHandle" title="Drag up or down to resize the controls. Tap to hide or show them."></div>
+      <div id="tbHandle" title="Drag up: bigger. Drag down: smaller, then hide. Tap the small bar to show the controls again."></div>
       <span class="mode nav-mode">
         <button id="smaller" class="ghost" title="Smaller text">A−</button>
         <button id="bigger" class="ghost" title="Bigger text">A+</button>
@@ -193,7 +175,6 @@
 </div>
 <script src="songs.js"></script>
 <script src="lyrics.js"></script>
-<script src="config.js"></script>
 <script>
 const list = document.getElementById("list");
 // Clean up pasted lyrics: trim each line, drop the blank line between every
@@ -315,39 +296,62 @@ document.getElementById("smaller").onclick = () => changeFont(-0.15);
 document.getElementById("bigger").onclick = () => changeFont(0.15);
 applyFont();
 
-// ---------- Phone bottom bar: drag the handle to resize, tap it to fold/unfold ----------
-// Size and folded state are remembered on this device.
+// ---------- Phone bottom bar: drag the handle to resize or hide it ----------
+//  • Drag up            → controls get bigger.
+//  • Drag down a little → controls get smaller.
+//  • Drag down further  → the bar slides away and becomes a small strip at the bottom.
+//  • Tap the small strip (or drag it up) → the bar comes back.
+// Size and hidden state are remembered on this device.
 const toolbarEl = document.querySelector(".toolbar"), handle = document.getElementById("tbHandle");
 let tbScale = parseFloat(localStorage.getItem("bhajanaBar")) || 1;
 const TB_MIN = 0.7, TB_MAX = 1.6;
+const HIDE_AFTER = 45;                                  // px dragged down past the smallest size
 function applyBar() { toolbarEl.style.setProperty("--tb", tbScale); }
 applyBar();
+function setFolded(f) {
+  toolbarEl.classList.toggle("folded", f);
+  localStorage.setItem("bhajanaBarFolded", f ? "1" : "0");
+}
 if (localStorage.getItem("bhajanaBarFolded") === "1") toolbarEl.classList.add("folded");
 let drag = null;
 handle.addEventListener("pointerdown", e => {
-  drag = { y: e.clientY, start: tbScale, moved: false };
+  drag = { y: e.clientY, start: tbScale, moved: false, hide: false };
   try { handle.setPointerCapture(e.pointerId); } catch {}   // keep getting moves even if the finger leaves the handle
   e.preventDefault();
 });
 handle.addEventListener("pointermove", e => {
   if (!drag) return;
-  const dy = drag.y - e.clientY;                     // positive = dragged up
+  const dy = drag.y - e.clientY;                        // positive = dragged up, negative = down
   if (Math.abs(dy) > 6) drag.moved = true;
-  if (!drag.moved || toolbarEl.classList.contains("folded")) return;
-  tbScale = Math.min(TB_MAX, Math.max(TB_MIN, +(drag.start + dy / 160).toFixed(3)));
-  applyBar();
-});
-handle.addEventListener("pointerup", () => {
-  if (!drag) return;
-  if (!drag.moved) {                                   // a tap: fold or unfold the bar
-    const folded = toolbarEl.classList.toggle("folded");
-    localStorage.setItem("bhajanaBarFolded", folded ? "1" : "0");
-  } else {
-    localStorage.setItem("bhajanaBar", tbScale);
+  if (!drag.moved) return;
+  if (toolbarEl.classList.contains("folded")) {          // small strip: a drag up brings the bar back
+    if (dy > 20) { setFolded(false); drag = null; }
+    return;
   }
-  drag = null;
+  const wanted = drag.start + dy / 160;
+  tbScale = Math.min(TB_MAX, Math.max(TB_MIN, +wanted.toFixed(3)));
+  applyBar();
+  // Dragging down beyond the smallest size: the bar follows the finger down, ready to hide.
+  const past = Math.max(0, (TB_MIN - wanted) * 160);
+  drag.hide = past > HIDE_AFTER;
+  toolbarEl.style.transform = past ? `translateY(${Math.min(past, 120)}px)` : "";
+  toolbarEl.style.opacity = past ? String(Math.max(0.35, 1 - past / 150)) : "";
 });
-handle.addEventListener("pointercancel", () => { drag = null; });
+function endDrag() {
+  if (!drag) return;
+  toolbarEl.style.transform = ""; toolbarEl.style.opacity = "";
+  if (!drag.moved) {
+    if (toolbarEl.classList.contains("folded")) setFolded(false);   // tap the small strip → bar comes back
+  } else if (drag.hide) {
+    tbScale = drag.start;                               // keep the size it had before hiding
+    applyBar();
+    setFolded(true);
+  }
+  localStorage.setItem("bhajanaBar", tbScale);
+  drag = null;
+}
+handle.addEventListener("pointerup", endDrag);
+handle.addEventListener("pointercancel", endDrag);
 
 // ---------- Lyrics rendering (one <span> per word, so we can highlight word by word) ----------
 let words = [];    // [{ el, key, line }]
@@ -505,7 +509,24 @@ const MIC_HELP = {
   network: "Voice follow needs an internet connection (speech is recognised online).",
   service: "Speech recognition is turned off or not available in this browser. " +
            "Try Chrome (Android) or Safari (iPhone), and check that Google / Siri speech is enabled.",
+  iosService: "Speech recognition is switched off on this iPhone. Turn on Settings → General → Keyboard → " +
+              "Enable Dictation (and allow Siri & Dictation in Settings → Screen Time → Content & Privacy " +
+              "Restrictions → Allowed Apps), then reload the page.",
+  teluguIOS: "This iPhone can't recognise Telugu speech, so the language has been switched to English. " +
+             "Tap 🎤 Voice again. (If it still fails: Settings → General → Keyboard → Enable Dictation.)",
+  language: "Telugu speech recognition isn't available here, so the language has been switched to English. " +
+            "Tap 🎤 Voice again.",
+  iosPaused: "iPhone stopped listening. Tap 🎤 Voice to carry on from the highlighted word.",
 };
+// iPhone / iPad (all iOS browsers use Safari's engine; iPadOS reports itself as a Mac with touch).
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+               (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+// Remember the chosen recognition language on this device.
+const vlangEl = document.getElementById("vlang");
+if (localStorage.getItem("bhajanaVoiceLang")) vlangEl.value = localStorage.getItem("bhajanaVoiceLang");
+vlangEl.onchange = () => localStorage.setItem("bhajanaVoiceLang", vlangEl.value);
+function switchToEnglish() { vlangEl.value = "en-IN"; localStorage.setItem("bhajanaVoiceLang", "en-IN"); }
 
 // Ask for the microphone directly: this is what makes the browser show the "Allow microphone?" pop-up.
 // (Some phones never show it when only speech recognition asks.)
@@ -524,23 +545,34 @@ async function askMicrophone() {
   }
 }
 
-async function startVoice() {
+function startVoice() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { setStatus(MIC_HELP.unsupported); return; }
   if (!words.length) { setStatus("No lyrics to follow."); return; }
+  if (!window.isSecureContext) { setStatus(MIC_HELP.insecure); return; }
+  // iPhone (Safari): recognition must start directly inside the tap - waiting for anything first
+  // makes Safari refuse ("service-not-allowed"). Safari shows its own microphone pop-up.
+  if (IS_IOS) { startRecognizer(SR); return; }
+  // Android / desktop: ask for the microphone first, so the "Allow microphone?" pop-up appears.
   if (voice.asking) return;                            // ignore double taps while the pop-up is open
   voice.asking = true;
   setStatus("Asking for microphone permission…");
-  const problem = await askMicrophone();
-  voice.asking = false;
-  if (problem) { setStatus(MIC_HELP[problem]); return; }
+  askMicrophone().then(problem => {
+    voice.asking = false;
+    if (problem) setStatus(MIC_HELP[problem]); else startRecognizer(SR);
+  });
+}
+
+function startRecognizer(SR) {
   if (!begin("voice")) return;
   voiceBtn.innerHTML = "⏹ Stop<span class=\"long\"> voice</span>"; voiceBtn.classList.add("on");
-  voice.misses = 0; voice.lastMatch = performance.now();
+  voice.misses = 0; voice.lastMatch = performance.now(); voice.started = false; voice.heard = false;
   const r = new SR();
-  r.lang = document.getElementById("vlang").value;
-  r.continuous = true; r.interimResults = true; r.maxAlternatives = 5;
+  r.lang = vlangEl.value;
+  r.continuous = true; r.interimResults = true; r.maxAlternatives = IS_IOS ? 1 : 5;
+  r.onstart = () => { voice.started = true; };
   r.onresult = e => {
+    voice.heard = true;
     // Use the latest result plus the one before it (more context), and try every alternative.
     const last = e.results[e.results.length - 1];
     const before = e.results.length > 1 ? e.results[e.results.length - 2][0].transcript : "";
@@ -560,21 +592,36 @@ async function startVoice() {
     }
   };
   r.onerror = e => {
-    const why = { "not-allowed": window.isSecureContext ? "blocked" : "insecure",
-                  "service-not-allowed": "service", "network": "network",
-                  "audio-capture": "nomic", "language-not-supported": "service" }[e.error];
+    const telugu = r.lang.startsWith("te");
+    let why = null;
+    if (e.error === "language-not-supported") {
+      if (telugu) { switchToEnglish(); why = IS_IOS ? "teluguIOS" : "language"; } else why = "service";
+    } else if (e.error === "service-not-allowed") {
+      // On iPhone this usually means Telugu isn't supported, or Dictation is switched off.
+      if (IS_IOS && telugu && !voice.heard) { switchToEnglish(); why = "teluguIOS"; }
+      else why = IS_IOS ? "iosService" : "service";
+    } else if (e.error === "not-allowed") {
+      // iPhone refuses automatic restarts that don't come from a tap.
+      why = IS_IOS && voice.heard ? "iosPaused" : "blocked";
+    } else if (e.error === "network") why = "network";
+    else if (e.error === "audio-capture") why = "nomic";
     if (why) { stopAuto(); setStatus(MIC_HELP[why]); }
     // "no-speech" / "aborted" are normal during pauses: onend restarts listening.
   };
-  // Chrome ends recognition after silence or ~1 minute; restart after a short delay.
+  // Chrome and Safari end recognition after silence or a while; restart after a short delay.
+  // If the browser refuses (iPhone sometimes does), stop and ask for a tap to continue.
   r.onend = () => {
     if (auto.mode !== "voice" || auto.rec !== r) return;
     clearTimeout(voice.restartTimer);
-    voice.restartTimer = setTimeout(() => { if (auto.rec === r) try { r.start(); } catch {} }, 250);
+    voice.restartTimer = setTimeout(() => {
+      if (auto.rec !== r) return;
+      try { r.start(); }
+      catch { stopAuto(); setStatus(IS_IOS ? MIC_HELP.iosPaused : "Listening stopped. Tap 🎤 Voice to continue."); }
+    }, 250);
   };
   auto.rec = r;
   try { r.start(); setStatus("Listening… start singing."); }
-  catch { stopAuto(); setStatus("Could not start voice recognition."); }
+  catch { stopAuto(); setStatus(IS_IOS ? MIC_HELP.iosService : "Could not start voice recognition."); }
 }
 
 // Fuzzy local alignment (Smith-Waterman style) of the heard words against the lyrics.
@@ -723,24 +770,9 @@ function buildIndex(container, filter = "", inDrawer) {
 }
 document.getElementById("q").oninput = e => render(e.target.value);
 
-// ---------- Password screen (password is set in config.js) ----------
-function opened() {
-  document.body.classList.remove("locked");
-  render();
-  route();
-}
-document.getElementById("lockForm").onsubmit = e => {
-  e.preventDefault();
-  const pw = document.getElementById("pw").value, err = document.getElementById("lockErr");
-  if (pw === window.SITE_PASSWORD) {
-    sessionStorage.setItem("bhajanaOpen", "1");   // stay unlocked until this browser tab is closed
-    err.textContent = "";
-    opened();
-  } else {
-    err.textContent = "Wrong password. Please try again.";
-  }
-};
-if (sessionStorage.getItem("bhajanaOpen") === "1") opened();
+// ---------- Start: build the song index and open the song in the URL (if any) ----------
+render();
+route();
 
 // ---------- Copy protection (allowed only inside the search box) ----------
 const inSearch = e => e.target && e.target.tagName === "INPUT";   // search box and password box
