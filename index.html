@@ -63,6 +63,13 @@
   #lyrics .w.done { color:#8f3307; }
   #lyrics .w.now { background:#ffc83d; color:#000; }
   #lyrics .gap { height:1em; }
+  /* Vocal and chorus sections (labels "Voc:" / "Ch:" in the lyrics file) */
+  #lyrics .voc { color:#14307a; }
+  #lyrics .ch { color:#14532d; }
+  #lyrics .tag { display:inline-block; font-size:.7em; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+                 padding:.05em .7em; margin:.2em 0 .1em; border-radius:999px; color:#fff; -webkit-text-stroke:0; }
+  #lyrics .tag.voc { background:#14307a; }
+  #lyrics .tag.ch { background:#14532d; }
   .toolbar { position:sticky; top:0; z-index:1; background:#fff7ec; padding:.5rem 0; display:flex; gap:.6rem;
              align-items:center; justify-content:center; flex-wrap:wrap; border-bottom:1px solid #f0d2ae; font-size:.9rem; }
   .toolbar button { padding:.4rem .8rem; border:0; border-radius:6px; background:#b3470f; color:#fff; cursor:pointer; font-size:1rem; }
@@ -311,6 +318,10 @@ const EMBLEMS = {
     <path d="M100 58 V192"/><path d="M84 116 L116 116 L100 132 Z M84 148 L116 148 L100 132 Z" fill="${C}"/>
     <path d="M152 36 a18 18 0 1 0 22 26 a14 14 0 1 1 -22 -26 Z" fill="${C}" stroke="none"/>`),
   // Amma vaari: lotus with kumkum bindu
+  // Rama: bow and arrow
+  rama: svg(`<path d="M52 22 C16 70 16 130 52 178" stroke-width="7"/><path d="M52 22 L52 178" stroke-width="2"/>
+    <path d="M52 100 H178" stroke-width="5"/><path d="M178 100 l-22 -13 M178 100 l-22 13"/>
+    <path d="M60 100 l-9 -9 M60 100 l-9 9 M72 100 l-9 -9 M72 100 l-9 9" stroke-width="3"/>`),
   amma: svg(`<path d="M100 62 C122 92 122 130 100 152 C78 130 78 92 100 62 Z"/>
     <path d="M100 152 C72 142 52 112 56 82 C80 96 96 122 100 152 Z"/><path d="M100 152 C128 142 148 112 144 82 C120 96 104 122 100 152 Z"/>
     <path d="M100 152 C62 152 32 134 24 112 C56 106 86 126 100 152 Z"/><path d="M100 152 C138 152 168 134 176 112 C144 106 114 126 100 152 Z"/>
@@ -484,11 +495,22 @@ function renderLyrics(text) {
   l.innerHTML = ""; words = []; lineEls = []; auto.cur = -1;
   if (!text) { l.textContent = "Lyrics not added yet."; l.className = "note"; return; }
   l.className = "";
+  // Optional section labels on their own line: "Voc:" (vocal) or "Ch:" (chorus). The label is shown as a
+  // small coloured tag (it is not a lyric word) and the lines under it get that colour, until a blank line.
+  const LABEL = /^\s*(voc|vocal|vocals|ch|chorus)\s*:\s*$/i;
+  let section = "";
   text.split("\n").forEach(t => {
     const d = document.createElement("div");
     l.appendChild(d);
-    if (!t) { d.className = "gap"; return; }
-    d.className = "line";
+    if (!t.trim()) { d.className = "gap"; section = ""; return; }
+    const lab = LABEL.exec(t);
+    if (lab) {
+      section = /^v/i.test(lab[1]) ? "voc" : "ch";
+      d.className = "tag " + section;
+      d.textContent = section === "voc" ? "Vocal" : "Chorus";
+      return;
+    }
+    d.className = "line" + (section ? " " + section : "");
     const li = lineEls.push(d) - 1;
     // Clicking a line (outside a word) starts following from the first word of that line.
     d.onclick = e => {

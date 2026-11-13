@@ -19,6 +19,8 @@ const CATEGORIES = [
     { title: "Lingastakam" },
     { title: "Sivude Dhevudani" },
   ]},
+  { name: "Ramudu Songs", bg: "rama", songs: [
+  ]},
   { name: "Amma vaari Songs", bg: "amma", songs: [
   ]},
   { name: "Ayyappa Songs", bg: "ayyappa", songs: [
