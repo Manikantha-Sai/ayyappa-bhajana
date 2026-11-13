@@ -7,6 +7,7 @@ Put one picture per category in this folder, named exactly:
   subramanya.jpg     - Subramanyam Swamy Songs
   venkateswara.jpg   - Venkateswara Swamy Songs
   shiva.jpg          - Sivudu Songs
+  rama.jpg           - Ramudu Songs
   amma.jpg           - Amma vaari Songs
   ayyappa.jpg        - Ayyappa Songs
 
